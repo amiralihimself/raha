@@ -19,9 +19,10 @@ import pickle
 import difflib
 import unicodedata
 import multiprocessing
-import pandas as pd
+import random
 import bs4
 import bz2
+import pandas as pd
 import numpy
 import py7zr
 import mwparserfromhell
@@ -287,7 +288,6 @@ class Correction:
         """
         This method takes the value-based models and an error dictionary to generate potential value-based corrections.
         """
-
         results_list = []
         for m, model_name in enumerate(["remover", "adder", "replacer", "swapper"]):
             model = models[m]
@@ -399,6 +399,7 @@ class Correction:
         """
         This method samples a tuple.
         """
+        t=3
         remaining_column_erroneous_cells = {}
         remaining_column_erroneous_values = {}
         for j in d.column_errors:
@@ -414,7 +415,10 @@ class Correction:
                 column_score = math.exp(len(remaining_column_erroneous_cells[j]) / len(d.column_errors[j]))
                 cell_score = math.exp(remaining_column_erroneous_values[j][value] / len(remaining_column_erroneous_cells[j]))
                 tuple_score[cell[0]] *= column_score * cell_score
-        d.sampled_tuple = numpy.random.choice(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
+        sample = random.sample(range(0, d.dataframe.shape[0]), t)
+        dataset_sample = tuple_score[sample]
+        index = numpy.random.choice(numpy.argwhere(dataset_sample == numpy.amax(dataset_sample)).flatten())
+        d.sampled_tuple = sample[index]
         if self.VERBOSE:
             print("Tuple {} is sampled.".format(d.sampled_tuple))
 
@@ -603,9 +607,6 @@ class Correction:
         return d.corrected_cells
 ########################################
 
-
-########################################
-
 def run_experiments(dataset_name, run, experiment):
     dataset_dictionary = {
         "name": dataset_name,
@@ -632,10 +633,8 @@ def run_experiments(dataset_name, run, experiment):
     df_info.to_csv(directoryAddress + '\\' + "experimentResult" + '\\' + experiment+"_"+dataset_name+"_"+str(run)+ ".csv")
 if __name__ == "__main__":
     num_runs=10
-    experiment="baran"
-   # datasets=['hospital', 'flights', 'beers', 'rayyan', 'tax']
-    datasets=[  'rayyan']
-
+    experiment="baranexp1"
+    datasets=['hospital', 'flights', 'beers', 'rayyan']
     for dataset_name in datasets:
         for run in range(1, num_runs+1):
             run_experiments(dataset_name, run, experiment)

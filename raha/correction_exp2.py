@@ -19,11 +19,12 @@ import pickle
 import difflib
 import unicodedata
 import multiprocessing
-import pandas as pd
+import random
 import bs4
 import bz2
 import numpy
 import py7zr
+import pandas as pd
 import mwparserfromhell
 import sklearn.svm
 import sklearn.ensemble
@@ -174,6 +175,33 @@ class Correction:
             if self.VERBOSE:
                 print("{} ({} / {}) is processed.".format(file_name, len(os.listdir(rd_folder_path)), len(compressed_dumps_list)))
 
+    def checkIfDominates(self, first, second):
+        allIsAsGood = True
+        atLeastOneIsBetter = False
+        num_objectives = len(first)
+        objective = 0
+        while objective < num_objectives:
+            atLeastOneIsBetter = atLeastOneIsBetter or (first[objective] > second[objective])
+            allIsAsGood = allIsAsGood and (first[objective] >= second[objective])
+            objective = objective + 1
+        return allIsAsGood and atLeastOneIsBetter
+    
+    def returnNonDominated(self, objectives):
+        dominated = [False] * len(objectives)
+        nonDominatedElements = []
+        indices = []
+        for i in range(len(objectives)):
+            for j in range(len(objectives)):
+                if ((i != j) and (dominated[j] == False)):
+                    if self.checkIfDominates(objectives[i], objectives[j]):
+                        dominated[j] = True
+        for i in range(len(dominated)):
+            if dominated[i] == False:
+                nonDominatedElements.append(objectives[i])
+                indices.append(i)
+        return nonDominatedElements, indices
+
+
     @staticmethod
     def _value_encoder(value, encoding):
         """
@@ -287,7 +315,6 @@ class Correction:
         """
         This method takes the value-based models and an error dictionary to generate potential value-based corrections.
         """
-
         results_list = []
         for m, model_name in enumerate(["remover", "adder", "replacer", "swapper"]):
             model = models[m]
@@ -406,15 +433,29 @@ class Correction:
                 if cell not in d.corrected_cells:
                     self._to_model_adder(remaining_column_erroneous_cells, j, cell)
                     self._to_model_adder(remaining_column_erroneous_values, j, d.dataframe.iloc[cell])
-        tuple_score = numpy.ones(d.dataframe.shape[0])
-        tuple_score[list(d.labeled_tuples.keys())] = 0.0
+        tuple_scores = []
+        cell_scores = numpy.ones(d.dataframe.shape[0])
+        column_scores = numpy.ones(d.dataframe.shape[0])
+        non_dominated_solutions = []
         for j in remaining_column_erroneous_cells:
             for cell in remaining_column_erroneous_cells[j]:
                 value = d.dataframe.iloc[cell]
+                temp_tuple = []
                 column_score = math.exp(len(remaining_column_erroneous_cells[j]) / len(d.column_errors[j]))
-                cell_score = math.exp(remaining_column_erroneous_values[j][value] / len(remaining_column_erroneous_cells[j]))
-                tuple_score[cell[0]] *= column_score * cell_score
-        d.sampled_tuple = numpy.random.choice(numpy.argwhere(tuple_score == numpy.amax(tuple_score)).flatten())
+                cell_score = math.exp(
+                    remaining_column_erroneous_values[j][value] / len(remaining_column_erroneous_cells[j]))
+                column_scores[cell[0]] *= column_score
+                cell_scores[cell[0]] *= cell_score
+        for index in range(len(cell_scores)):
+            temp_tuple = []
+            temp_tuple.append(column_scores[index])
+            temp_tuple.append(cell_scores[index])
+            tuple_scores.append(temp_tuple)
+
+        nonDominatedElements, indices = self.returnNonDominated(tuple_scores)
+        shuflledIndex = random.sample(range(0, len(indices)), 1)[0]
+
+        d.sampled_tuple=indices[shuflledIndex]
         if self.VERBOSE:
             print("Tuple {} is sampled.".format(d.sampled_tuple))
 
@@ -604,8 +645,6 @@ class Correction:
 ########################################
 
 
-########################################
-
 def run_experiments(dataset_name, run, experiment):
     dataset_dictionary = {
         "name": dataset_name,
@@ -632,9 +671,8 @@ def run_experiments(dataset_name, run, experiment):
     df_info.to_csv(directoryAddress + '\\' + "experimentResult" + '\\' + experiment+"_"+dataset_name+"_"+str(run)+ ".csv")
 if __name__ == "__main__":
     num_runs=10
-    experiment="baran"
-   # datasets=['hospital', 'flights', 'beers', 'rayyan', 'tax']
-    datasets=[  'rayyan']
+    experiment="baranexp2"
+    datasets=['hospital', 'flights', 'beers', 'rayyan']
 
     for dataset_name in datasets:
         for run in range(1, num_runs+1):

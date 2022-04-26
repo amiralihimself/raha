@@ -174,6 +174,12 @@ class Correction:
             if self.VERBOSE:
                 print("{} ({} / {}) is processed.".format(file_name, len(os.listdir(rd_folder_path)), len(compressed_dumps_list)))
 
+    def normalized_edit_similarity(self, a, b):
+        dist = bktrees.Levenshteind(a, b)
+        length = max([len(a), len(b)])
+        if (len(a)==0 or len(b)==0):
+            return 0
+        return ((length - dist) / length)
     @staticmethod
     def _value_encoder(value, encoding):
         """
@@ -287,7 +293,6 @@ class Correction:
         """
         This method takes the value-based models and an error dictionary to generate potential value-based corrections.
         """
-
         results_list = []
         for m, model_name in enumerate(["remover", "adder", "replacer", "swapper"]):
             model = models[m]
@@ -338,6 +343,18 @@ class Correction:
                         results_dictionary[new_value] = pr
             results_list.append(results_dictionary)
         return results_list
+
+    def _spelling_based_corrector(self, ed):
+        #load the previously stored BK-tree
+        with open('tree.pickle', 'rb') as handle:
+            tree = pickle.load(handle)
+        results_dictionary = {}
+        old_value=ed['old_value']
+        candidates = tree.search_for_similar_words(old_value, 3)
+        for candidate in candidates:
+            results_dictionary[candidate] = self.normalized_edit_similarity(old_value, candidate)
+
+        return [results_dictionary]
 
     def _domain_based_corrector(self, model, ed):
         """
@@ -470,8 +487,9 @@ class Correction:
         value_corrections = self._value_based_corrector(d.value_models, error_dictionary)
         vicinity_corrections = self._vicinity_based_corrector(d.vicinity_models, error_dictionary)
         domain_corrections = self._domain_based_corrector(d.domain_models, error_dictionary)
+        spelling_corrections= self._spelling_based_corrector(error_dictionary)
 
-        models_corrections = value_corrections + vicinity_corrections + domain_corrections
+        models_corrections = value_corrections + vicinity_corrections + domain_corrections + spelling_corrections
 
         corrections_features = {}
         for mi, model in enumerate(models_corrections):
@@ -603,9 +621,6 @@ class Correction:
         return d.corrected_cells
 ########################################
 
-
-########################################
-
 def run_experiments(dataset_name, run, experiment):
     dataset_dictionary = {
         "name": dataset_name,
@@ -619,6 +634,9 @@ def run_experiments(dataset_name, run, experiment):
     correct_values = data.get_correct_values_dictionary()
     tree = bktrees.BkTree(correct_values, bktrees.Levenshteind)
     tree.builder(correct_values)
+    #store the BK-tree as a pickle file 
+    with open('tree.pickle', 'wb') as handle:
+        pickle.dump(tree, handle, protocol=pickle.HIGHEST_PROTOCOL)
     app = Correction()
     correction_dictionary = app.run(data)
     p, r, f = data.get_data_cleaning_evaluation(correction_dictionary)[-3:]
@@ -630,12 +648,11 @@ def run_experiments(dataset_name, run, experiment):
     df_info=df_info.append(experiment_info, ignore_index=True)
     directoryAddress = os.getcwd()
     df_info.to_csv(directoryAddress + '\\' + "experimentResult" + '\\' + experiment+"_"+dataset_name+"_"+str(run)+ ".csv")
+########################################
 if __name__ == "__main__":
     num_runs=10
-    experiment="baran"
-   # datasets=['hospital', 'flights', 'beers', 'rayyan', 'tax']
-    datasets=[  'rayyan']
-
+    experiment="baranexp3"
+    datasets=['hospital', 'flights', 'beers', 'rayyan']
     for dataset_name in datasets:
         for run in range(1, num_runs+1):
             run_experiments(dataset_name, run, experiment)
