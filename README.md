@@ -1,4 +1,4 @@
-This repo was forked from BigDaMa/raha. For my COMP5118 (Trends in Big Data Management) project at Carleton University, I played around with Raha, improving for certain datasets. You can check out the final report in Big_Data_Project.pdf.
+This repo was forked from BigDaMa/raha. For my COMP5118 (Trends in Big Data Management) project at Carleton University, I played around with Raha, improving it for some datasets. You can check out the final report in Big_Data_Project.pdf.
 
 
 
